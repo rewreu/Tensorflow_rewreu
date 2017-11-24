@@ -13,3 +13,10 @@ with tf.Session(graph=tf.Graph()) as sess:
     op=sess.run([train_prediction],feed_dict={tf_train_dataset : tmp})
     print op
     print sess.run(w1)
+
+import os
+
+import sys
+sys.path.append('/usr/local/cuda-8.0/bin')
+sys.path.append('usr/local/cuda-8.0/lib64')
+usr/local/cuda-8.0/lib64
