@@ -125,13 +125,3 @@ def encodeRecursive(image_path, encode_path, sess, input, output):
             with open(encode_path, 'w') as bottleneck_file:
                 bottleneck_file.write(bottleneck_string)
 
-
-# def save2vector(imageList, BaseDir="./bottleNeck"):
-#     folderList = ["training", "testing", "validation"]
-#     ensure_dir_exists(BaseDir)
-#     categories = imageList.keys()
-#     for category in categories:
-#         imageList[category]["dir"]
-#         ensure_dir_exists(BaseDir + "/" + imageList[category]["dir"])
-#         for folder in folderList:
-#             for image in imageList[category][folder]:
