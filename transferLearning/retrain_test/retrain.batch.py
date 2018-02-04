@@ -1,9 +1,15 @@
+"""
+Using transfer learning to retrain image classification model
+
+"""
 import tensorflow as tf
-from IOutil import create_image_lists
+from IOutil import create_image_lists, saveModel
 from random import shuffle
 import numpy as np
 
 EPOCHS = 10
+STEPS_PER_EPOCHS = 1000
+BATCH_SIZE = 100
 BASE_MODEL_PATH = u"../inception_v3_model/classify_image_graph_def.pb"
 IMAGE_DIR = u"../food_dir"
 
@@ -50,17 +56,27 @@ def ModifiedModel(graph, labelsize):
         return graph, input_layer, label, optimizer, loss, predict
 
 
-def feedVec(offset, batch_size, image_list):
-    images = []
+def feedVec(offset, batch_size, shuffled_image_path_list):
+    """
+
+    :param offset:
+    :param batch_size:
+    :param shuffled_image_path_list: a list comes from shuffleList function
+    :return: list_encoded_images: a list of bottleneck_values(list of float numbers),
+             labels: a list of labels
+             both are ready to feed into tensorflow
+    """
+
+    list_encoded_images = []
     labels = []
-    for item in image_list:
+    for item in shuffled_image_path_list[offset:offset + batch_size]:
         with open(item[0], 'r') as bottleneck_file:
             bottleneck_string = bottleneck_file.read()
         bottleneck_values = [float(x) for x in bottleneck_string.split(',')]
-        images.append(bottleneck_values)
+        list_encoded_images.append(bottleneck_values)
         labels.append(item[1])
 
-    return None
+    return np.asarray(list_encoded_images, dtype=np.float32), np.asarray(labels, dtype=np.float32)
 
 
 def shuffleList(imagelist, base_dir, imageSet="training"):
@@ -69,46 +85,80 @@ def shuffleList(imagelist, base_dir, imageSet="training"):
     :param imagelist: image list returns from create_image_lists call,
     :param base_dir: base directory contains all image folders
     :param imageSet: options available are "training","testing", "validation"
-    :return:
+    :return: shuffled_image_path_list: a shuffled list, contains [[path_to_encoded_image, code],[]]
+             encoding_dict: reversed decoding dictionary, {0: "edamame", 1: "omelette"}
     """
-    encoding = {k: v for v, k in enumerate(imagelist.keys())}  # {"edamame": 0, "omelette": 1}
-    category_size = len(encoding)
-    image_path_list = []
+    encoding_dict = {k: v for v, k in enumerate(imagelist.keys())}  # {"edamame": 0, "omelette": 1}
+    # category_size = len(encoding_dict)
+    shuffled_image_path_list = []
     for category in imagelist:
-        code = encoding[category]
-        for image in imagelist[category]["training"]:
+        code = encoding_dict[category]
+        for image in imagelist[category][imageSet]:
             path = base_dir + "/" + imagelist[category]["dir"] + "/" + image
-            image_path_list.append([path, code])
+            shuffled_image_path_list.append([path, code])
 
+    # reverse keys values pairs{0: "edamame", 1: "omelette"}
+    decoding_dict = dict((v, k) for k, v in encoding_dict.iteritems())
 
-    shuffle(image_path_list)
-    return image_path_list
+    shuffle(shuffled_image_path_list)
+    return shuffled_image_path_list, decoding_dict
 
 
 def main():
     base_dir = IMAGE_DIR
     # base_dir = u"/notebooks/TransferLearning/fooddata/food-101/images"
-    imagelist = create_image_lists(base_dir, testing_percentage=10, validation_percentage=20)
-
+    imagelist = create_image_lists(base_dir, testing_percentage=5, validation_percentage=5)
+    training_suffledlist, decoding_dict = shuffleList(imagelist, base_dir, imageSet="training")
+    testing_suffledlist, _ = shuffleList(imagelist, base_dir, imageSet="testing")
+    validation_suffledlist, _ = shuffleList(imagelist, base_dir, imageSet="validation")
+    category_size = len(decoding_dict.keys())
     graph2 = loadBaseModel2Graph()
+
     (graph, input_layer, label, optimizer, loss, predict) = ModifiedModel(graph2, category_size)
 
     biasO = graph.get_tensor_by_name("biasO:0")
     weightO = graph.get_tensor_by_name("weightO:0")
     # print "train list is ",training_list
+
+    train_step = int(len(training_suffledlist) / BATCH_SIZE)
     with tf.Session(graph=graph) as sess:
         tf.global_variables_initializer().run()
-        for step in range(EPOCHS):
-            for i, item in enumerate(training_list):
-                with open(item[0], "r") as f:
-                    image = f.read()
-                lb = sess.run(tf.one_hot(item[1], category_size))
-                lb = lb.reshape(category_size, -1)
-                feed_dict = {input_layer: image, label: lb}
+        for epoch in range(EPOCHS):
+            for step in range(train_step):
+                data, label=feedVec(step*BATCH_SIZE, (step+1)*BATCH_SIZE, training_suffledlist)
+                # for i, item in enumerate(training_suffledlist):
+                #     with open(item[0], "r") as f:
+                #         image = f.read()
+                #     feedVec()
+                #     lb = sess.run(tf.one_hot(item[1], category_size))
+                #     lb = lb.reshape(category_size, -1)
+                # for i in steps:
+
+                feed_dict = {input_layer: data, label: label}
                 _, l, predictions, b0, w0 = sess.run([optimizer, loss, predict, biasO, weightO], feed_dict=feed_dict)
-                if i % 20 == 0:
-                    print("loss at step %d is %f" % (step * len(training_list) + i, l))
-                    # print w0[990:1000] monitor the weights change during optimizing
+                if step % 100 == 0:
+                    print("Training loss at EPOCH %d, step %d is %f" % (epoch, step * BATCH_SIZE, l))
+
+
+            # show validation loss
+            data, label = feedVec(0, 10*4, validation_suffledlist)
+            feed_dict = {input_layer: data, label: label}
+            l, b0, w0 = sess.run([loss, biasO, weightO],
+                                                 feed_dict=feed_dict)
+            print("Validation loss at EPOCH %d, step %d is %f" % (epoch, step * BATCH_SIZE, l))
+            print("Weights patial is:\n,", w0[990:1000])
+            print("Bias patial is:\n,", b0[990:1000])
+
+            # print w0[990:1000] monitor the weights change during optimizing
+        # show test loss
+        data, label = feedVec(0, 10 * 4, validation_suffledlist)
+        feed_dict = {input_layer: data, label: label}
+        l, b0, w0 = sess.run([loss, biasO, weightO],
+                             feed_dict=feed_dict)
+        print("test loss is" % (l))
+    # save model to load probuf file
+    output_node_names = "DecodeJpeg/contents:0,outputO"
+    saveModel(sess=sess, graph=graph, output_node_names=output_node_names)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ MAX_NUM_IMAGES_PER_CLASS = 1000 ^ 2
 
 
 def create_image_lists(image_dir, testing_percentage, validation_percentage,
-                       load_raw_image = True):
+                       load_raw_image=True):
     """Builds a list of training images from the file system.
 
     Analyzes the sub folders in the image directory, splits them into stable
@@ -114,14 +114,37 @@ def encodeRecursive(image_path, encode_path, sess, input, output):
             encodeRecursive(image_path + "/" + i, encode_path + "/" + i,
                             sess, input, output)
     elif image_path[-3:] in extensions or image_path[-4:] in extensions:
-        encode_path = encode_path.replace(".jpg",".txt")\
-            .replace(".JPG",".txt").replace(".jpeg",".txt").replace(".JPEG",".txt")
+        encode_path = encode_path.replace(".jpg", ".txt") \
+            .replace(".JPG", ".txt").replace(".jpeg", ".txt").replace(".JPEG", ".txt")
         with open(image_path, "rb") as imagefile:
             bytestring = imagefile.read()
-            feed_dict = {input:bytestring}
+            feed_dict = {input: bytestring}
             bottleneck_values = sess.run([output], feed_dict=feed_dict)
             bottleneck_values = np.squeeze(bottleneck_values)
             bottleneck_string = ','.join(str(x) for x in bottleneck_values)
             with open(encode_path, 'w') as bottleneck_file:
                 bottleneck_file.write(bottleneck_string)
 
+
+def saveModel(sess, graph, output_node_names, decode_dict, save_path="./model.pb"):
+    """
+
+    :param sess: TF session running the training
+    :param graph: TF graph contains all the necessary computaions
+    :param output_node_names: the nodes for inference use
+            format,output_node_names = "input,output,output2"
+    :return:
+    """
+    from tensorflow import graph_util
+    import json
+    # output_node_names example,output_node_names = "input,output,output2"
+    output_graph_def = graph_util.convert_variables_to_constants(
+        sess,  # The session is used to retrieve the weights
+        graph.as_graph_def(),
+        output_node_names.split(",")  # The output node names are used to select the usefull nodes
+    )
+    model = output_graph_def.SerializeToString()
+    with open(save_path,"wb") as modelfile:
+        modelfile.write(model)
+    with open(save_path.replace(".pb",".dict"),"wb") as dictfile:
+        dictfile.write(json.dumps(decode_dict))
