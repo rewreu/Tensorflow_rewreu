@@ -125,7 +125,7 @@ def main():
         tf.global_variables_initializer().run()
         for epoch in range(EPOCHS):
             for step in range(train_step):
-                data, label = feedVec(step * BATCH_SIZE, (step + 1) * BATCH_SIZE, training_suffledlist)
+                data, label = feedVec(step * BATCH_SIZE, BATCH_SIZE, training_suffledlist)
                 label=sess.run(tf.one_hot(label, category_size))
                 feed_dict = {input_layer: data, label_layer: label}
                 _, l, predictions, b0, w0 = sess.run([optimizer, loss, predict, biasO, weightO], feed_dict=feed_dict)
