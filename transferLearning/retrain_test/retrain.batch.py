@@ -8,7 +8,7 @@ from random import shuffle
 import numpy as np
 
 EPOCHS = 10
-BATCH_SIZE = 100
+BATCH_SIZE = 500
 BASE_MODEL_PATH = u"../inception_v3_model/classify_image_graph_def.pb"
 IMAGE_DIR = u"../food_dir_encoded"
 
@@ -43,13 +43,13 @@ def ModifiedModel(graph, labelsize):
         weightO = tf.Variable(tf.truncated_normal(shape=(2048, labelsize), stddev=0.01), name="weightO")
         biasO = tf.Variable(tf.random_normal([labelsize]), name="biasO")
 
-        predict = tf.add(tf.matmul(input_layer, weightO) , biasO)
+        predict = tf.add(tf.matmul(input_layer, weightO), biasO)
 
-        output = tf.add(tf.matmul(input_layer, weightO) , biasO, name="outputO")
+        output = tf.add(tf.matmul(connectLayer, weightO), biasO, name="outputO")
         label = tf.placeholder(tf.int32, shape=(None, labelsize))
 
-        #cross_entropy = tf.losses.sparse_softmax_cross_entropy(logits=predict, labels=label)
-        cross_entropy=tf.nn.softmax_cross_entropy_with_logits(logits=predict, labels=label)
+        # cross_entropy = tf.losses.sparse_softmax_cross_entropy(logits=predict, labels=label)
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=predict, labels=label)
         loss = tf.reduce_mean(cross_entropy)
 
         optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(loss, var_list=[weightO, biasO])
@@ -126,15 +126,15 @@ def main():
         for epoch in range(EPOCHS):
             for step in range(train_step):
                 data, label = feedVec(step * BATCH_SIZE, BATCH_SIZE, training_suffledlist)
-                label=sess.run(tf.one_hot(label, category_size))
+                label = sess.run(tf.one_hot(label, category_size))
                 feed_dict = {input_layer: data, label_layer: label}
                 _, l, predictions, b0, w0 = sess.run([optimizer, loss, predict, biasO, weightO], feed_dict=feed_dict)
                 if step % 10 == 0:
                     print("Training loss at EPOCH %d, step %d is %f" % (epoch, step * BATCH_SIZE, l))
 
             # show validation loss
-            data, label = feedVec(0, 10 * 4, validation_suffledlist[:100]) # limit the validation len to 100 in case
-                                                                            # of out of GPU memory
+            data, label = feedVec(0, 10 * 4, validation_suffledlist[:100])  # limit the validation len to 100 in case
+            # of out of GPU memory
             label = sess.run(tf.one_hot(label, category_size))
             feed_dict = {input_layer: data, label_layer: label}
             l, b0, w0 = sess.run([loss, biasO, weightO],
@@ -151,9 +151,11 @@ def main():
         l, b0, w0 = sess.run([loss, biasO, weightO],
                              feed_dict=feed_dict)
         print("test loss is" % (l))
-    # save model to load probuf file
-    output_node_names = "DecodeJpeg/contents:0,outputO"
-    saveModel(sess=sess, graph=graph, output_node_names=output_node_names)
+        
+        # save model to load probuf file,
+        # NOTE: no space between output node name and comma
+        output_node_names = "DecodeJpeg/contents,outputO"
+        saveModel(sess=sess, graph=graph, output_node_names=output_node_names, decode_dict=decoding_dict)
 
 
 if __name__ == "__main__":

@@ -45,11 +45,35 @@ def readVecImage():
     return bottleneck_values
 
 
+def testInference(model_file=u"./model.pb"):
+    #    with tf.Session() as sess:
+    if False:
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(model_file)
+    else:
+        with tf.gfile.Open(model_file, 'rb') as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+    # tf.import_graph_def(graph_def)
+    _ = tf.import_graph_def(graph_def, name='')
+    graph = tf.get_default_graph()
+    with tf.Session(graph=graph) as sess:
+
+        input = graph.get_tensor_by_name("DecodeJpeg/contents:0")
+        output = graph.get_tensor_by_name("outputO:0")
+        f = open("../food_dir/edamame/3061.jpg").read()
+        out = sess.run(output, feed_dict={input: f})
+        print "output is ", out
+
+
+
 if __name__ == "__main__":
     # test_encodeRecursive()
 
-    test_load_image_list()
-    bot = readVecImage()
+    # test_load_image_list()
+    # bot = readVecImage()
 
+    # test inference
 
+    testInference()
     print "done"
