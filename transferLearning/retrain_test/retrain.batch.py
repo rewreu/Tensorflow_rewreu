@@ -151,7 +151,7 @@ def main():
         l, b0, w0 = sess.run([loss, biasO, weightO],
                              feed_dict=feed_dict)
         print("test loss is" % (l))
-        
+
         # save model to load probuf file,
         # NOTE: no space between output node name and comma
         output_node_names = "DecodeJpeg/contents,outputO"
