@@ -1,3 +1,4 @@
+#%%writefile MNIST.py
 ### Between graph replication
 ### Asynchronus training
 '''
@@ -5,11 +6,9 @@ Distributed Tensorflow 1.2.0 example of using data parallelism and share model p
 Trains a simple sigmoid neural network on mnist for 20 epochs on three machines using one parameter server.
 Change the hardcoded host urls below with your own hosts.
 Run like this:
-pc-01$ python example.py --job_name="ps" --task_index=0
-pc-02$ python example.py --job_name="worker" --task_index=0
-pc-03$ python example.py --job_name="worker" --task_index=1
-pc-04$ python example.py --job_name="worker" --task_index=2
-More details here: ischlag.github.io
+pc-01$ python MNIST.py --job_name="ps" --task_index=0
+pc-02$ python MNIST.py --job_name="worker" --task_index=0
+pc-03$ python MNIST.py --job_name="worker" --task_index=1
 '''
 
 from __future__ import print_function
@@ -17,38 +16,68 @@ from __future__ import print_function
 import tensorflow as tf
 import sys
 import time
+from kinetica_proc import ProcData
+proc_data = ProcData()
+import os
+
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 # cluster specification
 parameter_servers = ["localhost:1988"]
-workers = ["localhost:1989"]
+workers = ["localhost:1989","localhost:1990","localhost:1991"]
 cluster = tf.train.ClusterSpec({"ps": parameter_servers, "worker": workers})
 
 # input flags
 tf.app.flags.DEFINE_string("job_name", "", "Either 'ps' or 'worker'")
 tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
 FLAGS = tf.app.flags.FLAGS
+print("------------0")
 
+# specify according to rank # and tom #
+
+Toms_per_rank=2
+if proc_data.request_info["rank_number"]==str(0):
+    pass
+if proc_data.request_info["rank_number"]=="1" and proc_data.request_info["tom_number"]=="0":
+    FLAGS.job_name='ps'
+    FLAGS.task_index=0
+if proc_data.request_info["rank_number"]=="1" and proc_data.request_info["tom_number"]=="1":
+    FLAGS.job_name='worker'
+    FLAGS.task_index=0
+if proc_data.request_info["rank_number"]=="2" and proc_data.request_info["tom_number"]=="0":
+    FLAGS.job_name='worker'
+    FLAGS.task_index=1
+if proc_data.request_info["rank_number"]=="2" and proc_data.request_info["tom_number"]=="1":
+    FLAGS.job_name='worker'
+    FLAGS.task_index=2
+
+print("------------1")
+print("rank %s, tom %s" %(proc_data.request_info["rank_number"],proc_data.request_info["tom_number"]))
+print("job_name %s, task_index %s" % (FLAGS.job_name,FLAGS.task_index))
 # start a server for a specific task
 server = tf.train.Server(
     cluster,
     job_name=FLAGS.job_name,
     task_index=FLAGS.task_index)
-
+print("------------1.5")
 # config
 batch_size = 100
 learning_rate = 0.0005
 training_epochs = 20
-logs_path = "/tmp/mnist/1"
 
 # load mnist data set
 from tensorflow.examples.tutorials.mnist import input_data
 
-mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
+addressN="/tmp/kinetica-proc-data-rank-"+proc_data.request_info["rank_number"]+"/"+proc_data.request_info["tom_number"]
 
+
+mnist = input_data.read_data_sets(addressN+'/MNIST_data', one_hot=True)
+print("------------2")
 if FLAGS.job_name == "ps":
     server.join()
+    print("server join in ")
 elif FLAGS.job_name == "worker":
-
+    print("worker join in ")
     # Between-graph replication
     with tf.device(tf.train.replica_device_setter(
             worker_device="/job:worker/task:%d" % FLAGS.task_index,
@@ -97,21 +126,8 @@ elif FLAGS.job_name == "worker":
         with tf.name_scope('train'):
             # optimizer is an "operation" which we can execute in a session
             grad_op = tf.train.GradientDescentOptimizer(learning_rate)
-            '''
-            rep_op = tf.train.SyncReplicasOptimizer(
-                grad_op,
-                replicas_to_aggregate=len(workers),
-                 replica_id=FLAGS.task_index, 
-                 total_num_replicas=len(workers),
-                 use_locking=True)
-             train_op = rep_op.minimize(cross_entropy, global_step=global_step)
-             '''
             train_op = grad_op.minimize(cross_entropy, global_step=global_step)
 
-        '''
-        init_token_op = rep_op.get_init_tokens_op()
-        chief_queue_runner = rep_op.get_chief_queue_runner()
-        '''
 
         with tf.name_scope('Accuracy'):
             # accuracy
@@ -134,14 +150,6 @@ elif FLAGS.job_name == "worker":
     begin_time = time.time()
     frequency = 100
     with sv.prepare_or_wait_for_session(server.target) as sess:
-        '''
-        # is chief
-        if FLAGS.task_index == 0:
-            sv.start_queue_runners(sess, [chief_queue_runner])
-            sess.run(init_token_op)
-        '''
-        # create log writer object (this will log on every machine)
-        writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
 
         # perform training cycles
         start_time = time.time()
@@ -158,7 +166,7 @@ elif FLAGS.job_name == "worker":
                 _, cost, summary, step = sess.run(
                     [train_op, cross_entropy, summary_op, global_step],
                     feed_dict={x: batch_x, y_: batch_y})
-                writer.add_summary(summary, step)
+                # writer.add_summary(summary, step)
 
                 count += 1
                 if count % frequency == 0 or i + 1 == batch_count:
@@ -177,3 +185,4 @@ elif FLAGS.job_name == "worker":
 
     sv.stop()
     print("done")
+proc_data.complete()
