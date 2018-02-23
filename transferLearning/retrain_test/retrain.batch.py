@@ -139,9 +139,9 @@ def main():
             feed_dict = {input_layer: data, label_layer: label}
             l, b0, w0 = sess.run([loss, biasO, weightO],
                                  feed_dict=feed_dict)
-            print("Validation loss at EPOCH %d, step %d is %f" % (epoch, step * BATCH_SIZE, l))
-            print("Weights patial is:\n,", w0[990:1000])
-            print("Bias patial is:\n,", b0[990:1000])
+            print("Validation loss at EPOCH %d is %f" % (epoch, l))
+            # print("Weights patial is:\n,", w0[990:1000])
+            # print("Bias patial is:\n,", b0[990:1000])
 
             # print w0[990:1000] monitor the weights change during optimizing
         # show test loss
@@ -150,7 +150,7 @@ def main():
         feed_dict = {input_layer: data, label_layer: label}
         l, b0, w0 = sess.run([loss, biasO, weightO],
                              feed_dict=feed_dict)
-        print("test loss is" % (l))
+        print("test loss is %d" % (l))
 
         # save model to load probuf file,
         # NOTE: no space between output node name and comma
