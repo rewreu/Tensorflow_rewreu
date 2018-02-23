@@ -41,7 +41,7 @@ def main(arg):
         top5 = predict.argsort()[-topN:][::-1]
         print("Prediction results: ")
         for i in top5:
-            print("(" + model_dict[str(i)], ", probablity is " + str(predict[i])[:5], ")")
+            print("(" + model_dict[str(i)], ", probablity is " + str(predict[i]), ")")
 
 
 if __name__ == "__main__":
